@@ -1,0 +1,58 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Airflow
+airflow/logs/
+airflow/plugins/__pycache__/
+*.pid
+
+# Spark
+spark/data/*
+!spark/data/.gitkeep
+checkpoint/
+metastore_db/
+derby.log
+spark-warehouse/
+
+# Docker
+.docker/
+data/
+postgres_data/
+cassandra_data/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Environment
+.env
+.venv
+venv/
+ENV/
