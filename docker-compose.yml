@@ -127,6 +127,49 @@ services:
       - ./spark/data:/opt/bitnami/spark/data
       - ./spark/conf/spark-defaults.conf:/opt/bitnami/spark/conf/spark-defaults.conf
 
+  rabbitmq:
+    image: rabbitmq:3.12-management
+    container_name: rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.10.2
+    container_name: elasticsearch
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+    ports:
+      - "9200:9200"
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+
+  redis:
+    image: redis:7.2
+    container_name: redis
+    ports:
+      - "6379:6379"
+
+  trino:
+    image: trinodb/trino:latest
+    container_name: trino
+    ports:
+      - "8083:8080"
+    volumes:
+      - ./trino/etc/catalog:/etc/trino/catalog
+      - ./spark/data:/data
+
   postgres:
     image: postgres:13
     container_name: postgres
@@ -144,9 +187,13 @@ services:
     container_name: airflow-init
     depends_on:
       - postgres
+      - redis
     environment:
       - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@postgres/airflow
       - AIRFLOW__CORE__FERNET_KEY="R9u-R9u-R9u-R9u-R9u-R9u-R9u-R9u-R9u-R9u-R9u="
+      - AIRFLOW__CORE__EXECUTOR=CeleryExecutor
+      - AIRFLOW__CELERY__BROKER_URL=redis://redis:6379/0
+      - AIRFLOW__CELERY__RESULT_BACKEND=db+postgresql://airflow:airflow@postgres/airflow
     command: >
       bash -c " until airflow db migrate; do
         echo 'Waiting for postgres...'
@@ -166,6 +213,9 @@ services:
       - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@postgres/airflow
       - AIRFLOW__CORE__FERNET_KEY="R9u-R9u-R9u-R9u-R9u-R9u-R9u-R9u-R9u-R9u-R9u="
       - AIRFLOW__CORE__LOAD_EXAMPLES=False
+      - AIRFLOW__CORE__EXECUTOR=CeleryExecutor
+      - AIRFLOW__CELERY__BROKER_URL=redis://redis:6379/0
+      - AIRFLOW__CELERY__RESULT_BACKEND=db+postgresql://airflow:airflow@postgres/airflow
     ports:
       - "8082:8080"
     volumes:
@@ -191,10 +241,49 @@ services:
       - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@postgres/airflow
       - AIRFLOW__CORE__FERNET_KEY="R9u-R9u-R9u-R9u-R9u-R9u-R9u-R9u-R9u-R9u-R9u="
       - AIRFLOW__CORE__LOAD_EXAMPLES=False
+      - AIRFLOW__CORE__EXECUTOR=CeleryExecutor
+      - AIRFLOW__CELERY__BROKER_URL=redis://redis:6379/0
+      - AIRFLOW__CELERY__RESULT_BACKEND=db+postgresql://airflow:airflow@postgres/airflow
     volumes:
       - ./airflow/dags:/opt/airflow/dags
       - ./airflow/logs:/opt/airflow/logs
       - ./airflow/plugins:/opt/airflow/plugins
+
+  airflow-worker:
+    image: apache/airflow:2.7.3
+    container_name: airflow-worker
+    command: worker
+    depends_on:
+      airflow-webserver:
+        condition: service_healthy
+    environment:
+      - EXECUTOR=LocalExecutor
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@postgres/airflow
+      - AIRFLOW__CORE__FERNET_KEY="R9u-R9u-R9u-R9u-R9u-R9u-R9u-R9u-R9u-R9u-R9u="
+      - AIRFLOW__CORE__EXECUTOR=CeleryExecutor
+      - AIRFLOW__CELERY__BROKER_URL=redis://redis:6379/0
+      - AIRFLOW__CELERY__RESULT_BACKEND=db+postgresql://airflow:airflow@postgres/airflow
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags
+      - ./airflow/logs:/opt/airflow/logs
+      - ./airflow/plugins:/opt/airflow/plugins
+
+  airflow-flower:
+    image: apache/airflow:2.7.3
+    container_name: airflow-flower
+    command: celery flower
+    depends_on:
+      airflow-webserver:
+        condition: service_healthy
+    environment:
+      - EXECUTOR=LocalExecutor
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@postgres/airflow
+      - AIRFLOW__CORE__FERNET_KEY="R9u-R9u-R9u-R9u-R9u-R9u-R9u-R9u-R9u-R9u-R9u="
+      - AIRFLOW__CORE__EXECUTOR=CeleryExecutor
+      - AIRFLOW__CELERY__BROKER_URL=redis://redis:6379/0
+      - AIRFLOW__CELERY__RESULT_BACKEND=db+postgresql://airflow:airflow@postgres/airflow
+    ports:
+      - "5555:5555"
 
   cassandra:
     image: cassandra:latest
