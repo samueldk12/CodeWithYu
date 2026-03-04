@@ -50,9 +50,14 @@ with DAG(
         op_kwargs={'host': 'spark-master', 'port': 7077},
     )
 
+    check_iceberg = BashOperator(
+        task_id='verify_iceberg',
+        bash_command='docker exec spark-master spark-submit --master spark://spark-master:7077 /opt/bitnami/spark/apps/test_iceberg.py',
+    )
+
     log_success = BashOperator(
         task_id='log_system_health',
         bash_command='echo ">>> TODAS AS FERRAMENTAS ESTÃO ONLINE E ACESSÍVEIS! <<<"',
     )
 
-    [check_kafka, check_cassandra, check_spark] >> log_success
+    [check_kafka, check_cassandra, check_spark] >> check_iceberg >> log_success
